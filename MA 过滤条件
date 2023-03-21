@@ -1,0 +1,124 @@
+extern string  sep11a="================================================================";
+//--- Inputs
+
+input int    MovingPeriod  =12;
+input int    MovingShift   =6;
+//| Check for open order conditions                                  |
+//+------------------------------------------------------------------+
+void CheckForOpen()
+  {
+   double ma;
+   int    res;
+//--- go trading only for first tiks of new bar
+   if(Volume[0]>1) return;
+//--- get Moving Average 
+   ma=iMA(NULL,0,MovingPeriod,MovingShift,MODE_SMA,PRICE_CLOSE,0);
+//--- sell conditions
+   if(Open[1]>ma && Close[1]<ma)
+     {
+      res=OrderSend(Symbol(),OP_SELL,LotsOptimized(),Bid,3,0,0,"",MAGICMA,0,Red);
+      return;
+     }
+//--- buy conditions
+   if(Open[1]<ma && Close[1]>ma)
+     {
+      res=OrderSend(Symbol(),OP_BUY,LotsOptimized(),Ask,3,0,0,"",MAGICMA,0,Blue);
+      return;
+     }
+//---
+  }
+//+------------------------------------------------------------------+
+//| Check for close order conditions                                 |
+//+------------------------------------------------------------------+
+void CheckForClose()
+  {
+   double ma;
+//--- go trading only for first tiks of new bar
+   if(Volume[0]>1) return;
+//--- get Moving Average 
+   ma=iMA(NULL,0,MovingPeriod,MovingShift,MODE_SMA,PRICE_CLOSE,0);
+//---
+   for(int i=0;i<OrdersTotal();i++)
+     {
+      if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES)==false) break;
+      if(OrderMagicNumber()!=MAGICMA || OrderSymbol()!=Symbol()) continue;
+      //--- check order type 
+      if(OrderType()==OP_BUY)
+        {
+         if(Open[1]>ma && Close[1]<ma)
+           {
+            if(!OrderClose(OrderTicket(),OrderLots(),Bid,3,White))
+               Print("OrderClose error ",GetLastError());
+           }
+         break;
+        }
+      if(OrderType()==OP_SELL)
+        {
+         if(Open[1]<ma && Close[1]>ma)
+           {
+            if(!OrderClose(OrderTicket(),OrderLots(),Ask,3,White))
+               Print("OrderClose error ",GetLastError());
+           }
+         break;
+        }
+     }
+//---
+  }
+//+------------------------------------------------------------------+
+//| OnTick function                                                  |
+//+------------------------------------------------------------------+
+void OnTick()
+  {
+//--- check for history and trading
+   if(Bars<100 || IsTradeAllowed()==false)
+      return;
+//--- calculate open orders by current symbol
+   if(CalculateCurrentOrders(Symbol())==0) CheckForOpen();
+   else                                    CheckForClose();
+//---
+  }
+//+------------------------------------------------------------------+
+
+
+
+
+另外请问这一段可以直接用吗，还是需要像下面的代码或者头文件：
+文字说明：
+looking for a cross on the H1 time frame in order to enter a move as soon as
+possible. Here is an H1 chart with the 20 period D1 EMA emulated by a 480 period EMA
+i.e. 20 days multiplied by 24 hours in a day
+• Closing open sell trades and opening a buy trade following a long cross of the EMA.
+A long cross is when:
+◦ 2 candles ago, the candle closed below the EMA.
+◦ 1 candle ago, the candle closed above the EMA.
+• Closing open buys and opening a sell trade following a short cross of the EMA. A
+short cross is when:
+◦ 2 candles ago, the candle closed above the EMA.
+◦ 1 candle ago, the candle closed below the EMA.
+
+Note:Send a stop order rather than an immediate market order. This alleviates 'chop'
+when the market crosses and re-crosses the moving average several times during
+the markets ranging period
+Instead of sending an immediate market order, send a stop order instead, x pips away
+from the current price i.e.
+• Long cross. Send a buy stop order, say, 20 pips above the current price.
+• The market is whipsawing and recrosses short. Delete the buy stop order and send
+a sell stop 20 pips below the current price.
+Hey presto; lots of losers avoided. Deciding exactly how many pips away to set the stops
+is something that we can only decide with the passage of time. The relevant input is
+StopOrderDistancePips in the, “Trading Methods” section. What it should be all depends
+on the width of the whipsaw and we will only arrive at that with experience.
+
+参考代码：
+extern string  sep11a="================================================================";
+//Trade trigger
+extern string  ttr="---- The trade trigger is a cross of a moving average ----";
+extern ENUM_TIMEFRAMES TradingTimeFrame=PERIOD_H1;
+extern ENUM_TIMEFRAMES MaTimeFrame=PERIOD_D1;
+extern bool    EveryTickMode=false;
+extern int     MaPeriod=20;
+extern ENUM_MA_METHOD MaMethod=MODE_EMA;
+extern ENUM_APPLIED_PRICE MaAppliedPrice=PRICE_CLOSE;
+ int     MaShift=0;
+////////////////////////////////////////////////////////////////////////////////////////
+string         mastatus[];
